@@ -12,6 +12,12 @@ import (
 	"github.com/ishanmadhav/codefusion/internal/api"
 	"github.com/ishanmadhav/codefusion/internal/loader"
 	"github.com/ishanmadhav/codefusion/pkg/engine/executor"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+const (
+	dsn = "host=localhost user=jamadmin password=jampass dbname=jamlydb port=5432 sslmode=disable TimeZone=Asia/Shanghai"
 )
 
 type CodePayload struct {
@@ -22,9 +28,14 @@ type CodePayload struct {
 
 type Engine struct {
 	KafkaConsumer *kafka.Consumer
+	db            *gorm.DB
 }
 
 func NewEngine() *Engine {
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		panic("Failed to connect to database")
+	}
 	kafkaConfigFile := "getting-started.properties"
 	conf := loader.ReadConfig(kafkaConfigFile)
 	conf["group.id"] = "codefusion_engine"
@@ -37,6 +48,7 @@ func NewEngine() *Engine {
 
 	return &Engine{
 		KafkaConsumer: c,
+		db:            db,
 	}
 }
 
@@ -72,7 +84,7 @@ func (e *Engine) StartEngine() error {
 				fmt.Print("Failed to unmarshal code payload")
 				fmt.Print(err)
 			}
-			e.Execute(&code)
+			e.Execute(&code, string(ev.Key))
 		}
 	}
 
@@ -80,10 +92,16 @@ func (e *Engine) StartEngine() error {
 	return nil
 }
 
-func (e *Engine) Execute(code *api.Code) {
-	err := executor.Execute(code)
+func (e *Engine) Execute(code *api.Code, uuid string) {
+	err := executor.Execute(code, uuid)
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 	fmt.Println(code.Output)
+	var codeFromDB api.Code
+	e.db.First(&codeFromDB, code.ID)
+	codeFromDB.Output = code.Output
+	e.db.Save(&codeFromDB)
+
 }

@@ -24,7 +24,13 @@ type Resp struct {
 
 // Gets the code execution results by ID, results like output
 func (s *Server) getCodeExecutionResultsByID(c *fiber.Ctx) error {
-	return c.SendString("Hello Code")
+	var code api.Code
+	id := c.Params("id")
+	err := s.db.First(&code, id).Error
+	if err != nil {
+		return c.Status(500).JSON(err)
+	}
+	return c.JSON(code)
 }
 
 // Submits code for execution
@@ -38,6 +44,10 @@ func (s *Server) submitCode(c *fiber.Ctx) error {
 		Language: codePayload.Language,
 		Input:    codePayload.Code,
 		Output:   "",
+	}
+	err := s.db.Create(&code).Error
+	if err != nil {
+		return c.Status(500).JSON(err)
 	}
 	fmt.Print(code)
 	topic := "executions"
@@ -60,7 +70,13 @@ func (s *Server) submitCode(c *fiber.Ctx) error {
 
 // list of all the executed code programs
 func (s *Server) getAllCodes(c *fiber.Ctx) error {
-	return c.SendString("All codes are fetched here")
+	var codes []api.Code
+	err := s.db.Find(&codes).Error
+	if err != nil {
+		return c.Status(500).JSON(err)
+	}
+	return c.JSON(codes)
+
 }
 
 // delete code by ID, like a utility function for deletion
